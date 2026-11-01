@@ -14,7 +14,7 @@
 
   <div id="hud1" class="hud">
     <div class="hud-head" style="--pc:#1f8a4c">
-      <span class="card-title">Spieler 1</span><span class="kicker">WASD · AKTION E</span>
+      <span class="card-title">Ihr Pod</span><span class="kicker">WASD / PFEILE · AKTION E</span>
     </div>
     <div class="hud-body">
       <div class="hud-top">
@@ -31,27 +31,9 @@
     </div>
   </div>
 
-  <div id="hud2" class="hud">
-    <div class="hud-head" style="--pc:#1b5fa8">
-      <span class="card-title">Spieler 2</span><span class="kicker">PFEILE · AKTION M</span>
-    </div>
-    <div class="hud-body">
-      <div class="hud-top">
-        <div class="box money-box"><span class="lbl">Vermögen</span><span id="hud2-money" class="money">CHF 0.–</span></div>
-        <div class="box depth-box"><span class="lbl">Tiefe</span><span id="hud2-depth" class="value">0 m</span></div>
-      </div>
-      <div class="meter"><span class="lbl">Hülle</span><div class="tanks"><div id="hud2-hull" class="fill hull"></div></div></div>
-      <div class="meter"><span class="lbl" id="hud2-fuelname">Kohle</span><div class="tanks"><div id="hud2-fuel" class="fill fuel"></div></div></div>
-      <div class="meter"><span class="lbl love-lbl"><img class="pxi heart" data-icon="heart" alt="">Liebe</span><div class="tanks"><div id="hud2-love" class="fill love"></div></div></div>
-      <div class="hud-foot">
-        <span class="chip"><span class="lbl">Tresor</span><b id="hud2-cargo" class="value">0/0</b></span>
-        <span class="chip"><span class="lbl">Artefakte</span><b id="hud2-relics" class="value">0/0</b></span>
-      </div>
-    </div>
-  </div>
-
-  <div id="help"><b>Spieler 1:</b> WASD + E &nbsp;·&nbsp; <b>Spieler 2:</b> Pfeile + M &nbsp;·&nbsp; <b>Esc</b> zurück</div>
+  <div id="help"><b>WASD / Pfeile</b> fliegen &amp; bohren &nbsp;·&nbsp; <b>E</b> eintreten / bestätigen &nbsp;·&nbsp; <b>T</b> Ton an &nbsp;·&nbsp; <b>Esc</b> zurück</div>
   <div id="gadgetbar"></div>
+  <div id="gadget-picker" class="hidden"></div>
   <div id="hint"></div>
   <div id="toast"><span id="toast-tag"></span><span id="toast-text"></span></div>
   <div id="panel" class="card hidden"></div>
@@ -73,19 +55,13 @@
       <div class="card-body">
         <div class="quote">«&nbsp;Gehen Sie direkt in die Tiefe.<br>Werden Sie unverschämt reich.&nbsp;»</div>
         <div class="goal">Graben, reich werden – und das Herz von Prinzessin Amélie gewinnen.</div>
-        <div class="modes">
-          <button class="mode" data-mode="single">
-            <span class="mode-key">1</span>
-            <span class="mode-title">Einzelspieler</span>
-            <span class="mode-desc">WASD oder Pfeile · Aktion E</span>
-          </button>
-          <button class="mode gold" data-mode="multi">
-            <span class="mode-key">2</span>
-            <span class="mode-title">Zwei Spieler</span>
-            <span class="mode-desc">WASD + E · Pfeile + M</span>
+        <div class="start-options">
+          <button class="start-game" data-start>
+            <span class="start-title">Spiel starten</span>
+            <span class="start-desc">WASD oder Pfeile · Aktion E</span>
           </button>
         </div>
-        <span class="press">Taste 1 oder 2 drücken – oder klicken</span>
+        <span class="press">Enter, Leertaste oder 1 drücken – oder klicken</span>
         <input id="cheat" type="text" placeholder="Geheimcode" autocomplete="off" spellcheck="false" maxlength="16" aria-label="Geheimcode">
       </div>
     </div>

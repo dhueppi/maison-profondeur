@@ -256,11 +256,6 @@ const GAME_DATA = {
 
   spawnColumn: 32,
 
-  // Schalter für Spielfunktionen
-  features: {
-    multiplayer: false,     // Zwei-Spieler-Modus auf der Startseite anbieten (Code bleibt drin, true = wieder sichtbar)
-  },
-
   camera: {
     singleViewWidth: 0.5,   // Einzelspieler: sichtbarer Anteil der Kartenbreite (0.5 = 50 %, alles doppelt so gross)
   },

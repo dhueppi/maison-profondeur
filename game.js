@@ -254,19 +254,9 @@
   // So viele Upgrade-Stufen wie Areas (bei 4 Areas: Stufe 0 + 4 Upgrades)
   const maxLevel = cat => Math.min(D.upgrades[cat].length - 1, D.areas.length);
 
-  const PLAYER_DEFS = [
-    { name: 'Spieler 1', short: '1', color: '#1f8a4c', body: ['#f1dfa8', '#c9a961', '#7d6230'], spawn: D.spawnColumn - 2,
-      controls: { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', action: 'KeyE' }, actionLabel: 'E' },
-    { name: 'Spieler 2', short: '2', color: '#1b5fa8', body: ['#e6f0fa', '#8fb3d9', '#34587f'], spawn: D.spawnColumn,
-      controls: { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', action: 'KeyM' }, actionLabel: 'M' },
-  ];
-
-  // Einzelspieler: WASD oder Pfeile, Aktion mit E, M oder Enter
-  const SINGLE_DEF = { ...PLAYER_DEFS[0], spawn: D.spawnColumn,
-    controls: { left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], action: ['KeyE', 'KeyM', 'Enter'] } };
-  let mode = 'single';
-  const multi = () => mode === 'multi';
-  const who = (pl = pod) => multi() ? `${pl.name}: ` : '';
+  const PLAYER_DEF = { body: ['#f1dfa8', '#c9a961', '#7d6230'], spawn: D.spawnColumn,
+    controls: { left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], action: ['KeyE', 'Enter'] }, actionLabel: 'E' };
+  const who = () => '';
   const ctrlHas = (pl, k, code) => [].concat(pl.controls[k]).includes(code);
 
   function makePlayer(def, idx) {
@@ -275,7 +265,7 @@
       ...def, idx,
       keys: { left: false, right: false, up: false, down: false },
       money: D.start.money, levels: { drill: 0, engine: 0, tank: 0, hull: 0, cargo: 0 },
-      maxDepth: 0, loveStep: 0, hitCooldown: 0, lastHitBy: null, dead: 0,
+      maxDepth: 0, loveStep: 0, hitCooldown: 0, lastHitBy: null,
       towing: null, trail: [], artifacts: [],
       gadgets: {}, captured: {}, capSel: null, defusing: null, shield: 0, torch: 0,
       x: def.spawn * T + (T - pw) / 2, y: SURF * T - ph, w: pw, h: ph, vx: 0, vy: 0,
@@ -285,16 +275,15 @@
     };
   }
 
-  function newGame(newMode) {
-    if (newMode) mode = newMode;
+  function newGame() {
     generateWorld(D.world.seed);
     state = {
       paused: false, over: false, won: false, time: 0,
       heartBurst: 0, hair: 0, shake: 0, danger: 0,
       panel: null, panelPlayer: null,
     };
-    players = multi() ? PLAYER_DEFS.map(makePlayer) : [makePlayer(SINGLE_DEF, 0)];
-    applyModeUi();
+    players = [makePlayer(PLAYER_DEF, 0)];
+    applyHelpUi();
     pod = players[0];
     particles = [];
     pickups = [];
@@ -327,20 +316,10 @@
   }
 
   // ---------- Eingabe ----------
-  // Zwei-Spieler-Modus ist eingebaut, kann aber über data.js (features.multiplayer) ausgeblendet werden
-  const MULTI_ENABLED = !!(D.features && D.features.multiplayer);
-  if (!MULTI_ENABLED) {
-    const mb = introEl.querySelector('[data-mode="multi"]');
-    if (mb) mb.style.display = 'none';
-    introEl.querySelector('.modes').classList.add('single-only');
-    introEl.querySelector('.press').textContent = 'Enter, Leertaste oder 1 drücken – oder klicken';
-  }
-
   document.querySelectorAll('img[data-icon]').forEach(el => { el.src = PIXEL.iconURL(el.dataset.icon); });
 
-  function startMode(m) {
-    if (m === 'multi' && !MULTI_ENABLED) m = 'single';
-    newGame(m);
+  function startGame() {
+    newGame();
     introOpen = false;
     introEl.classList.add('gone');
     if (cheatEl) cheatEl.blur();
@@ -353,36 +332,79 @@
     panelEl.classList.add('hidden');
   }
   introEl.addEventListener('click', e => {
-    const b = e.target.closest('[data-mode]');
-    if (b) startMode(b.dataset.mode);
+    if (e.target.closest('[data-start]')) startGame();
   });
 
-  function applyModeUi() {
-    $('hud2').style.display = multi() ? '' : 'none';
-    $('hud1').querySelector('.kicker').textContent = multi() ? 'WASD · AKTION E' : 'WASD / PFEILE · AKTION E';
-    $('hud1').querySelector('.card-title').textContent = multi() ? 'Spieler 1' : 'Ihr Pod';
-    $('help').innerHTML = multi()
-      ? `<b>Spieler 1:</b> WASD + E &nbsp;·&nbsp; <b>Spieler 2:</b> Pfeile + M &nbsp;·&nbsp; <b>T</b> Ton ${SFX.muted ? 'aus' : 'an'} &nbsp;·&nbsp; <b>Esc</b> zurück`
+  function applyHelpUi() {
+    $('help').innerHTML = touchUi
+      ? 'ZIEHEN: STEUERN · TIPPEN: AKTION · GADGET TIPPEN: NUTZEN / HALTEN: LADEN'
       : `<b>WASD / Pfeile</b> fliegen &amp; bohren &nbsp;·&nbsp; <b>E</b> eintreten / bestätigen &nbsp;·&nbsp; <b>T</b> Ton ${SFX.muted ? 'aus' : 'an'} &nbsp;·&nbsp; <b>Esc</b> zurück`;
   }
-  function releaseAllKeys() { for (const pl of players) for (const k in pl.keys) pl.keys[k] = false; }
+  function releaseAllKeys() {
+    for (const pl of players) for (const k in pl.keys) pl.keys[k] = false;
+    if (touchGesture) clearTouchGesture();
+  }
+  const touchUi = window.matchMedia('(pointer: coarse)').matches;
+  if (touchUi) {
+    const startDesc = introEl.querySelector('[data-start] .start-desc');
+    if (startDesc) startDesc.textContent = 'Ziehen zum Steuern · Tippen für Aktion';
+    const press = introEl.querySelector('.press');
+    if (press) press.textContent = 'Zum Starten tippen';
+  }
+  let touchGesture = null;
+  function setTouchDirection(dx, dy) {
+    const pl = players[0];
+    if (!pl) return;
+    const deadzone = 18;
+    pl.keys.left = dx < -deadzone && Math.abs(dx) > Math.abs(dy) * 0.55;
+    pl.keys.right = dx > deadzone && Math.abs(dx) > Math.abs(dy) * 0.55;
+    pl.keys.up = dy < -deadzone && Math.abs(dy) > Math.abs(dx) * 0.55;
+    pl.keys.down = dy > deadzone && Math.abs(dy) > Math.abs(dx) * 0.55;
+  }
+  function clearTouchGesture() {
+    touchGesture = null;
+    setTouchDirection(0, 0);
+  }
+  function finishTouchGesture(e, cancelled = false) {
+    if (!touchGesture || e.pointerId !== touchGesture.id) return;
+    const { moved, started } = touchGesture;
+    clearTouchGesture();
+    if (!cancelled && !moved && performance.now() - started < 700) {
+      if (dialog) advanceDialog(false);
+      else if (players[0]) actionPressed(players[0]);
+    }
+  }
+  canvas.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'touch' || introOpen || touchGesture) return;
+    touchGesture = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false, started: performance.now() };
+    canvas.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!touchGesture || e.pointerId !== touchGesture.id) return;
+    const dx = e.clientX - touchGesture.x, dy = e.clientY - touchGesture.y;
+    if (Math.hypot(dx, dy) >= 18) touchGesture.moved = true;
+    if (touchGesture.moved) setTouchDirection(dx, dy);
+    e.preventDefault();
+  });
+  canvas.addEventListener('pointerup', e => finishTouchGesture(e));
+  canvas.addEventListener('pointercancel', e => finishTouchGesture(e, true));
   window.addEventListener('pointerdown', () => SFX.unlock());
   window.addEventListener('keydown', e => {
     SFX.unlock();
     if (introOpen && e.target === cheatEl) {   // Tippen im Geheimcode-Feld
-      if (e.code === 'Enter' || e.code === 'NumpadEnter') { e.preventDefault(); startMode('single'); }
+      if (e.code === 'Enter' || e.code === 'NumpadEnter') { e.preventDefault(); startGame(); }
       return;
     }
-    if (e.code === 'KeyT' && !e.repeat) { const m = SFX.toggleMute(); toast(m ? 'Ton aus. Die Stille des Adels.' : 'Ton an. Bitte um Ruhe für das Orchester.', EMERALD); applyModeUi(); }
+    if (e.code === 'KeyT' && !e.repeat) { const m = SFX.toggleMute(); toast(m ? 'Ton aus. Die Stille des Adels.' : 'Ton an. Bitte um Ruhe für das Orchester.', EMERALD); applyHelpUi(); }
     if (dialog && !introOpen) {
-      if (!e.repeat && ['KeyE', 'KeyM', 'Enter', 'Space', 'NumpadEnter'].includes(e.code)) advanceDialog(false);
+      if (!e.repeat && ['KeyE', 'Enter', 'Space', 'NumpadEnter'].includes(e.code)) advanceDialog(false);
       if (e.code === 'Escape') advanceDialog(true);
       e.preventDefault();
       return;
     }
     if (introOpen) {
-      if (['Digit1', 'Numpad1', 'Enter', 'Space'].includes(e.code)) startMode('single');
-      if (MULTI_ENABLED && (e.code === 'Digit2' || e.code === 'Numpad2')) startMode('multi');
+      if (['Digit1', 'Numpad1', 'Enter', 'Space'].includes(e.code)) startGame();
       e.preventDefault();
       return;
     }
@@ -393,17 +415,14 @@
     }
     if (used) e.preventDefault();
     if (e.code === 'Escape') closePanel();
-    // Gadgets: Einzelspieler & Spieler 1 = Tasten 1–9, Spieler 2 = Numpad 1–9
-    // Erbeutete Bomben: 0 legt, Tab wechselt (Spieler 2: Numpad 0 / Numpad-Komma)
+    // Erbeutete Bomben: 0 legt, Tab wechselt
     if (!state.paused && !state.over && !introOpen) {
-      if (e.code === 'Digit0' || (e.code === 'Numpad0' && !multi())) { placeCaptured(players[0]); e.preventDefault(); }
-      else if (e.code === 'Numpad0' && multi()) { placeCaptured(players[1]); e.preventDefault(); }
+      if (e.code === 'Digit0' || e.code === 'Numpad0') { placeCaptured(players[0]); e.preventDefault(); }
       else if (e.code === 'Tab') { cycleCaptured(players[0]); e.preventDefault(); }
-      else if (e.code === 'NumpadDecimal' && multi()) { cycleCaptured(players[1]); e.preventDefault(); }
     }
     const dm = e.code.match(/^(Digit|Numpad)([1-9])$/);
     if (dm && !state.paused && !state.over) {
-      const pl = dm[1] === 'Numpad' && multi() ? players[1] : players[0];
+      const pl = players[0];
       if (pl) { useGadget(pl, Number(dm[2]) - 1); e.preventDefault(); }
     }
   });
@@ -412,7 +431,7 @@
   });
   window.addEventListener('blur', releaseAllKeys);
 
-  // Aktionstaste: E (Spieler 1) / M (Spieler 2)
+  // Aktionstaste: E
   function actionPressed(pl) {
     if (state.over) { newGame(); return; }
     if (state.paused) {
@@ -423,7 +442,7 @@
       if (state.panel === 'museum') doAction('deliver');
       if (state.panel === 'tower' && loveProgress(pl) >= 1) { winGame(pl); return; }
       closePanel();
-    } else if (pl.dead <= 0) {
+    } else {
       pod = pl;
       const s = currentStation();
       if (s) openPanel(s.id, pl);
@@ -451,13 +470,16 @@
     storyDone[key] = true;
     const src = lines || STORY.scenes[key];
     if (!src || !src.length) { if (onDone) onDone(); return; }
-    const nm = multi() ? 'Messieurs' : 'Monsieur';
+    const nm = 'Monsieur';
     const q = src.map(([who, text]) => ({ who, text: text.replace(/\{name\}/g, nm) }));
     if (dialog) { dialog.queue.push(...q); if (onDone) dialog.done.push(onDone); return; }
     dialog = { queue: q, i: 0, shown: 0, done: onDone ? [onDone] : [], blip: 0 };
     releaseAllKeys(); SFX.loop('drill', false); SFX.loop('engine', false);
     showLine();
   }
+  dlgEl.addEventListener('pointerup', e => {
+    if (e.pointerType === 'touch') { e.preventDefault(); advanceDialog(false); }
+  });
   function showLine() {
     const ln = dialog.queue[dialog.i], c = STORY.cast[ln.who] || { name: '', color: '#ffd23f' };
     dlgEl.classList.remove('hidden');
@@ -636,8 +658,7 @@
   }
   // Räumlicher Sound: leiser mit Entfernung zum nächsten Pod, Stereo nach Bildschirmposition
   function sfxAt(name, x, y, o = {}) {
-    const alive = players.filter(pl => pl.dead <= 0);
-    if (!alive.length) return;
+    const alive = players;
     let d = 1e9; for (const pl of alive) d = Math.min(d, Math.hypot(pl.x + pl.w / 2 - x, pl.y + pl.h / 2 - y));
     const range = (o.range || 16) * T;
     if (d > range) return;
@@ -760,7 +781,7 @@
 
   function updateWorms(dt) {
     let danger = 0;
-    const alive = players.filter(pl => pl.dead <= 0);
+    const alive = players;
     for (const w of worms) {
       const e = w.e;
       // nächster lebender Spieler ist das Ziel
@@ -895,7 +916,7 @@
       const sg = parts[Math.floor(k * parts.length / w.e.loot.count)];
       pickups.push({ x: sg.x, y: sg.y, vx: (Math.random() - 0.5) * 120, vy: -60 - Math.random() * 60, ore, t: Math.random() * 6 });
     }
-    toast(multi() ? `${pod.name} erlegt ${w.e.name}! Beute einsammeln.` : `${w.e.name} erlegt! Beute einsammeln.`, EMERALD);
+    toast(`${w.e.name} erlegt! Beute einsammeln.`, EMERALD);
   }
 
   // ===================================================================
@@ -958,7 +979,7 @@
       // anseilen bei Berührung
       if (rel.cooldown > 0) continue;
       for (const pl of players) {
-        if (pl.dead > 0 || pl.towing) continue;
+        if (pl.towing) continue;
         if (Math.hypot(pl.x + pl.w / 2 - rel.x, pl.y + pl.h / 2 - rel.y) < 26) {
           pod = pl;
           rel.state = 'towed'; rel.owner = pl; pl.towing = rel;
@@ -1035,7 +1056,10 @@
   let baits = [];  // {def, x, y, vy, t}
 
   function gadgetShopHtml() {
-    let h = `<div class="gadget-title">GADGETS <span class="muted">· Tasten 1–${D.gadgets.length} · kein Limit · erbeutete Bomben: Taste 0, Tab wechselt</span></div><table class="gadget-table">`;
+    const controlHint = touchUi
+      ? '· Longpress auf einen Slot lädt ein Gadget · erbeutete Bomben ebenfalls auswählbar'
+      : `· Tasten 1–${D.gadgets.length} · kein Limit · erbeutete Bomben: Taste 0, Tab wechselt`;
+    let h = `<div class="gadget-title">GADGETS <span class="muted">${controlHint}</span></div><table class="gadget-table">`;
     D.gadgets.forEach((g, i) => {
       const have = pod.gadgets[g.id] || 0;
       h += `<tr><td class="g-key"><kbd>${i + 1}</kbd></td><td class="g-icon"><img class="pxi" src="${PIXEL.iconURL(g.id)}" alt=""></td>
@@ -1047,7 +1071,7 @@
 
   function useGadget(pl, idx) {
     const g = D.gadgets[idx];
-    if (!g || pl.dead > 0) return;
+    if (!g) return;
     pod = pl;
     if ((pl.gadgets[g.id] || 0) <= 0) { toast(`${who()}Kein ${g.name.split(' «')[0]} mehr – im Atelier Privé nachkaufen.`); SFX.play('denied'); return; }
     const cx = pl.x + pl.w / 2, cy = pl.y + pl.h / 2;
@@ -1109,7 +1133,7 @@
   // Erbeutete Bomben: Taste 0 legt die gewählte Bombe, Tab wechselt die Sorte
   function capturedList(pl) { return D.mines.filter(m => (pl.captured[m.id] || 0) > 0); }
   function placeCaptured(pl) {
-    if (!pl || pl.dead > 0) return;
+    if (!pl) return;
     pod = pl;
     let id = pl.capSel;
     if (!id || !(pl.captured[id] > 0)) { const l = capturedList(pl); id = l.length ? l[l.length - 1].id : null; }
@@ -1133,7 +1157,7 @@
     for (const pl of players) {
       const d = pl.defusing;
       if (!d) continue;
-      if (d.m.gone || pl.dead > 0) { pl.defusing = null; continue; }
+      if (d.m.gone) { pl.defusing = null; continue; }
       d.t -= dt;
       if (Math.random() < 0.3) spawnParticle(d.m.x + (Math.random() - 0.5) * 10, d.m.y - 6, Math.random() < 0.5 ? '#ffd23f' : '#ffffff', { size: 2, vy: -40 });
       if (d.t <= 0) {
@@ -1219,7 +1243,7 @@
     // Spieler in der Nähe (Schaden – Seil reisst dann automatisch)
     let hurtAny = false;
     for (const pl of players) {
-      if (pl.dead > 0 || pl.shield > 0) continue;
+      if (pl.shield > 0) continue;
       const dist = Math.hypot(pl.x + pl.w / 2 - b.x, pl.y + pl.h / 2 - b.y);
       if (dist < blast) {
         const dmg = Math.round(g.selfDamage * (b.mine ? 1 - 0.5 * dist / blast : 1));
@@ -1277,7 +1301,7 @@
   // Fackel: Pixel-Pfeil zum nächsten Artefakt
   function drawTorchArrows(ox, oy) {
     for (const pl of players) {
-      if (pl.torch <= 0 || pl.dead > 0) continue;
+      if (pl.torch <= 0) continue;
       const px = pl.x + pl.w / 2, py = pl.y + pl.h / 2;
       let best = null, bd = Infinity;
       for (const i of artifactAt.keys()) {
@@ -1313,7 +1337,7 @@
         p.y = Math.floor((ny + 6) / T) * T - 6; p.vy = 0; p.vx *= 0.85;
       } else p.y = ny;
       for (const pl of players) {
-        if (p.taken || pl.dead > 0) continue;
+        if (p.taken) continue;
         if (Math.hypot(p.x - pl.x - pl.w / 2, p.y - pl.y - pl.h / 2) < 22) {
           pod = pl;
           if (pod.cargo.length < stat('cargo')) {
@@ -1477,7 +1501,7 @@
       pod.loveStep = step;
       state.heartBurst = 2.5; SFX.play('heart');
       if (p >= 1) { toast(`${who()}Ihr Haar reicht bis zum Boden! Schnell zum Turm!`, EMERALD); story('hairDone'); }
-      else { if (step === 2) story('love50'); toast(multi() ? `${pod.name} beeindruckt die Prinzessin! ♥ ${step * 25} %` : `Das Haar der Prinzessin wächst! ♥ ${step * 25} %`, EMERALD); }
+      else { if (step === 2) story('love50'); toast(`Das Haar der Prinzessin wächst! ♥ ${step * 25} %`, EMERALD); }
     }
   }
 
@@ -1494,14 +1518,9 @@
     state.over = true; state.paused = true; state.won = true;
     hintEl.style.display = 'none';
     const min = Math.floor(state.time / 60), sec = Math.floor(state.time % 60);
-    const rows = players.map(pl => `<tr><td><b style="color:${pl.color}">${pl.name}</b>${pl === winner ? ' ♥' : ''}</td>
-      <td class="num">${pl.maxDepth * D.world.metersPerTile} m</td><td class="num">${fmt(pl.money)}</td><td class="num">${pl.artifacts.length}</td><td class="num">${scoreOf(pl).total.toLocaleString('de-CH')}</td></tr>`).join('');
-    const stats = multi()
-      ? `<table><tr><td class="muted">Spieler</td><td class="num muted">Tiefe</td><td class="num muted">Vermögen</td><td class="num muted">Artefakte</td><td class="num muted">Punkte</td></tr>${rows}</table>`
-      : scoreHtml(winner);
-    panelEl.innerHTML = cardHead('ENDE GUT, ALLES GUT', multi() ? `${winner.name} gewinnt! ♥` : 'Liebe gewonnen! ♥', '#c2417a') + `<div class="card-body">
-      <div class="tagline">«&nbsp;Ein Mann, der so tief gräbt, gräbt auch für mich.&nbsp;»<br>Die Prinzessin sagt Ja${multi() ? ' – zu ' + winner.name : ''}.</div>
-      ${stats}
+    panelEl.innerHTML = cardHead('ENDE GUT, ALLES GUT', 'Liebe gewonnen! ♥', '#c2417a') + `<div class="card-body">
+      <div class="tagline">«&nbsp;Ein Mann, der so tief gräbt, gräbt auch für mich.&nbsp;»<br>Die Prinzessin sagt Ja.</div>
+      ${scoreHtml(winner)}
       <div class="balance"><span>Spielzeit</span><b>${min}:${String(sec).padStart(2, '0')}</b></div>
       ${endButtons()}</div>`;
     panelEl.classList.remove('hidden');
@@ -1583,11 +1602,10 @@
     const id = state.panel;
     pod = state.panelPlayer;
     const st = D.stations.find(s => s.id === id);
-    const K = pod.actionLabel;
-    const owner = multi() ? ` · <span style="background:${pod.color};padding:1px 8px;border-radius:4px">${pod.name.toUpperCase()}</span>` : '';
-    let html = cardHead(`BESITZURKUNDE${owner}`, st.name, st.color) + '<div class="card-body">';
+    const K = 'E';
+    let html = cardHead('BESITZURKUNDE', st.name, st.color) + '<div class="card-body">';
     html += `<div class="tagline">${st.tagline}</div>
-      <div class="balance"><span>${multi() ? 'Vermögen ' + pod.name : 'Ihr Vermögen'}</span><b>${fmt(pod.money)}</b></div>`;
+      <div class="balance"><span>Ihr Vermögen</span><b>${fmt(pod.money)}</b></div>`;
 
     if (id === 'fuel') {
       const missingFuel = stat('tank') - pod.fuel;
@@ -1657,7 +1675,7 @@
       const hairM = Math.round(p * PR.goalDepth * D.world.metersPerTile);
       const goalM = PR.goalDepth * D.world.metersPerTile;
       const hearts = Array.from({ length: 10 }, (_, i) => `<span style="color:${i < Math.round(p * 10) ? '#c2417a' : '#d8cdb3'}">♥</span>`).join('');
-      html = cardHead(multi() ? `DIE PRINZESSIN · ${pod.name.toUpperCase()}` : 'DIE PRINZESSIN', st.name, st.color) + `<div class="card-body">
+      html = cardHead('DIE PRINZESSIN', st.name, st.color) + `<div class="card-body">
         <div class="tagline" style="font-size:20px">«&nbsp;${princessQuote()}&nbsp;»</div>
         <div style="text-align:center;font-size:30px;letter-spacing:2px;margin:6px 0 10px">${hearts}</div>
         <table>
@@ -1736,7 +1754,7 @@
       let sum = 0;
       for (const id of pod.cargo) sum += (D.ores.find(o => o.id === id) || { value: 0 }).value;
       pod.money += sum;
-      if (sum) { toast(multi() ? `Die Bank zahlt ${pod.name} ${fmt(sum)}.` : `Die Bank zahlt Ihnen ${fmt(sum)}.`, EMERALD); SFX.play('sell'); }
+      if (sum) { toast(`Die Bank zahlt Ihnen ${fmt(sum)}.`, EMERALD); SFX.play('sell'); }
       pod.cargo = [];
     }
     if (act === 'buygadget') {
@@ -1744,7 +1762,7 @@
       if (g && pod.money >= g.price) {
         pod.money -= g.price;
         pod.gadgets[g.id] = (pod.gadgets[g.id] || 0) + g.uses;
-        toast(`${who()}${g.name} gekauft (+${g.uses}). Taste ${D.gadgets.indexOf(g) + 1} zum Benutzen.`, EMERALD); SFX.play('buy');
+        toast(`${who()}${g.name} gekauft (+${g.uses}). ${touchUi ? 'Per Longpress auf einen Gadget-Slot laden.' : `Taste ${D.gadgets.indexOf(g) + 1} zum Benutzen.`}`, EMERALD); SFX.play('buy');
       }
     }
     if (act === 'buy') {
@@ -1775,7 +1793,6 @@
     for (const pl of players) { pod = pl; updatePlayer(dt); }
     updateWorms(dt);
     for (const pl of players) {
-      if (pl.dead > 0) continue;
       pod = pl;
       pod.hitCooldown -= dt;
       wormInteract(dt);
@@ -1795,13 +1812,13 @@
     }
     hintEl.style.display = 'none';
     // Ambient-Hintergrund je nach Zone des (ersten lebenden) Pods
-    const ref = players.find(pl => pl.dead <= 0) || players[0];
+    const ref = players[0];
     if (ref) {
       const d = Math.floor((ref.y + ref.h) / T) - SURF;
       SFX.ambient(d < 3 ? 'surface' : LAIR_ROWS && ref.y + ref.h > LAIR_TOP * T ? 'lair' : 'a' + (areaIndexAt(d) + 1));
     }
     // Dauertöne: Bohrer und Antrieb (lautester Pod zählt)
-    const alive = players.filter(pl => pl.dead <= 0);
+    const alive = players;
     const driller = alive.find(pl => pl.drill || pl.attack);
     SFX.loop('drill', !!driller, { lvl: driller ? driller.levels.drill : 0 });
     const thruster = alive.find(pl => pl.thrusting);
@@ -1830,7 +1847,7 @@
     return { x: W * T / 2, y: FLOOR_Y() - 50, vy: 0, hp: BOSS.hp, state: 'sleep', t: 0, facing: -1, phase: 1, hurt: 0, active: false, dead: false, hintT: 0, hintI: 0, lastHitter: null, thrown: 0, air: false };
   }
   const bossLine = k => `${BOSS.name}: ${BOSS.lines[k]}`;
-  function inLair(pl) { return pl.dead <= 0 && pl.y + pl.h > (LAIR_TOP + 2) * T; }
+  function inLair(pl) { return pl.y + pl.h > (LAIR_TOP + 2) * T; }
   function hurtBoss(dmg, by) {
     if (!boss || boss.dead) return;
     boss.hp -= dmg; boss.hurt = 0.15;
@@ -1841,7 +1858,7 @@
   }
   function killBoss() {
     boss.dead = true; boss.state = 'dead'; boss.t = 3; state.shake = 1.2; state.flash = 0.6;
-    const pl = boss.lastHitter || players.find(p => p.dead <= 0) || players[0];
+    const pl = boss.lastHitter || players[0];
     pl.money += BOSS.reward; pl.bossKill = true;
     pod = pl; toastInfo(`${who()}${BOSS.lines.death} +${fmt(BOSS.reward)}`); SFX.play('victory');
     for (const id of BOSS.treasure) { const ore = D.ores.find(o => o.id === id); if (ore) pickups.push({ x: boss.x, y: boss.y - 30, vx: (Math.random() - 0.5) * 320, vy: -200 - Math.random() * 200, ore, t: Math.random() * 6 }); }
@@ -1850,7 +1867,7 @@
     setTimeout(() => { if (!state.over) story('bossDead'); }, 1600);
   }
   function chandelierNear(pl) {
-    if (!boss || pl.dead > 0) return null;
+    if (!boss) return null;
     const cx = pl.x + pl.w / 2, cy = pl.y + pl.h / 2;
     return chandeliers.find(ch => ch.state === 'hang' && Math.abs(cx - ch.x) < 48 && Math.abs(cy - ch.y) < 64) || null;
   }
@@ -1884,7 +1901,7 @@
           continue;
         }
         for (const pl of players) {
-          if (pl.dead > 0 || pl.shield > 0) continue;
+          if (pl.shield > 0) continue;
           if (Math.abs(pl.x + pl.w / 2 - ch.x) < 30 && Math.abs(pl.y + pl.h / 2 - ch.y) < 26 && pl.hitCooldown <= 0) {
             pl.hull -= 20; pl.hitCooldown = 0.8; pl.koReason = 'Vom eigenen Kronleuchter erschlagen. Stilvoll.'; pl.koTimer = 0.6;
             pod = pl; toast(`${who()}Autsch – Kronleuchter auf den eigenen Pod! −20 HP`);
@@ -1904,7 +1921,7 @@
     for (const r of bossRocks) {
       r.vy += P.gravity * dt; r.x += r.vx * dt; r.y += r.vy * dt;
       for (const pl of players) {
-        if (pl.dead > 0 || r.dead) continue;
+        if (r.dead) continue;
         if (Math.hypot(pl.x + pl.w / 2 - r.x, pl.y + pl.h / 2 - r.y) < 22) {
           r.dead = true;
           if (pl.shield > 0) continue;
@@ -2109,7 +2126,6 @@
   // ---------- Umgebung des Pods: Wasser, Treibsand, Magma, Glatteis ----------
   function environment(dt) {
     const e = { accel: 1, speed: 1, gravity: 1, lift: 0, thrust: 1, maxFall: P.maxFallSpeed, fuel: 1, ice: false };
-    if (pod.dead > 0) return e;
     const cx = pod.x + pod.w / 2, c = Math.floor(cx / T);
     const tm = tileAt(c, Math.floor((pod.y + pod.h / 2) / T)), tb = tileAt(c, Math.floor((pod.y + pod.h - 2) / T));
     const fl = isFluid(tm) ? tm : isFluid(tb) ? tb : 0;
@@ -2148,7 +2164,6 @@
       if (!solid(tileAt(m.c, Math.floor(m.y / T)))) { fallBody(m, dt, 12); m.c = Math.floor(m.x / T); }
       if (!m.armed) {
         for (const pl of players) {
-          if (pl.dead > 0) continue;
           if (Math.hypot(pl.x + pl.w / 2 - m.x, pl.y + pl.h / 2 - m.y) < m.def.trigger * T + 12) {
             m.armed = true; m.fuse = m.def.fuse; m.owner = pl; m.tick = -1;
             pod = pl; toast(`${who()}${m.def.name} ist scharf! ${m.def.fuse.toFixed(1)} s – nichts wie weg!`); SFX.play('arm');
@@ -2177,7 +2192,7 @@
       const x = m.x - ox, y = m.y - oy;
       if (x < -64 || y < -64 || x > vw + 64 || y > vh + 64) continue;
       const buried = solid(tileAt(m.c, Math.floor(m.y / T)));
-      const near = players.some(pl => pl.dead <= 0 && Math.hypot(pl.x + pl.w / 2 - m.x, pl.y + pl.h / 2 - m.y) < (m.def.trigger + 3) * T);
+      const near = players.some(pl => Math.hypot(pl.x + pl.w / 2 - m.x, pl.y + pl.h / 2 - m.y) < (m.def.trigger + 3) * T);
       if (buried && !near && !m.armed) continue;           // erst in der Nähe sichtbar (der Metalldetektor piept)
       if (m.armed) {
         const blink = Math.floor(state.time * (m.fuse < 1.2 ? 14 : 6)) % 2;
@@ -2235,7 +2250,7 @@
     toast(fromFault ? `${who()}${PH.quake.faultMsg}` : pick(PH.quake.msg));
   }
   function updateQuake(dt) {
-    const deep = players.some(pl => pl.dead <= 0 && areaIndexAt(Math.floor((pl.y + pl.h) / T) - SURF) >= PH.quake.fromArea - 1 && pl.y > (SURF + 5) * T);
+    const deep = players.some(pl => areaIndexAt(Math.floor((pl.y + pl.h) / T) - SURF) >= PH.quake.fromArea - 1 && pl.y > (SURF + 5) * T);
     if (deep && state.quake <= 0) {
       state.nextQuake -= dt;
       if (state.nextQuake <= 0) { state.nextQuake = PH.quake.randomEvery[0] + Math.random() * (PH.quake.randomEvery[1] - PH.quake.randomEvery[0]); startQuake(false); }
@@ -2249,7 +2264,7 @@
     for (const rk of rocks) {
       rk.vy = Math.min(600, rk.vy + P.gravity * dt); rk.y += rk.vy * dt;
       for (const pl of players) {
-        if (pl.dead > 0 || rk.dead) continue;
+        if (rk.dead) continue;
         if (Math.hypot(pl.x + pl.w / 2 - rk.x, pl.y + pl.h / 2 - rk.y) < 20) {
           rk.dead = true;
           if (pl.shield > 0) continue;
@@ -2271,8 +2286,7 @@
     rocks = rocks.filter(rk => !rk.dead && rk.y < H * T);
   }
   function spawnRock() {
-    const alive = players.filter(pl => pl.dead <= 0);
-    if (!alive.length) return;
+    const alive = players;
     const pl = pick(alive);
     const pc = Math.floor((pl.x + pl.w / 2) / T), pr = Math.floor(pl.y / T);
     const c = pc + Math.floor(Math.random() * 13) - 6;
@@ -2288,11 +2302,6 @@
   function drawRocks(ox, oy) { for (const rk of rocks) blitC(PIXEL.rubble(rk.ai), rk.x - ox, rk.y - oy); }
 
   function updatePlayer(dt) {
-    if (pod.dead > 0) {
-      pod.dead -= dt;
-      if (pod.dead <= 0) respawn(pod);
-      return;
-    }
     pod.thrusting = false;
     pod.prevX = pod.x; pod.prevY = pod.y;
 
@@ -2390,34 +2399,13 @@
   }
 
   function endButtons() {
-    const keys = multi() ? 'E / M' : 'E';
-    return `<div class="actions"><button class="gold" data-act="restart">Nochmal spielen (${keys})</button>
+    return `<div class="actions"><button class="gold" data-act="restart">Nochmal spielen (E)</button>
       <button class="secondary" data-act="menu">Hauptmenü</button></div>`;
   }
 
   function knockout(reason) {
     SFX.play('ko');
-    if (!multi()) { gameOver(reason); return; }
-    const fee = Math.round(pod.money * 0.25);
-    pod.money -= fee;
-    pod.cargo = [];
-    pod.drill = null;
-    if (pod.towing) dropTow();
-    pod.dead = 3;
-    state.shake = 0.5;
-    for (let k = 0; k < 30; k++) spawnParticle(pod.x + pod.w / 2, pod.y + pod.h / 2, k % 2 ? pod.body[1] : '#1b1b1b');
-    toast(`${who()}${reason} Abschleppdienst −${fmt(fee)}, Tresor verloren.`);
-  }
-
-  function respawn(pl) {
-    pod = pl;
-    // Abschleppdienst stellt den Pod vor der Tankstelle ab (Marmorboden, kann nicht weggegraben werden)
-    const fuelSt = D.stations.find(st => st.id === 'fuel');
-    const col = fuelSt ? fuelSt.x + 1 + pl.idx : pl.spawn;
-    pl.x = col * T + (T - pl.w) / 2; pl.y = SURF * T - pl.h;
-    pl.vx = pl.vy = 0; pl.onGround = true;
-    pl.fuel = stat('tank'); pl.hull = stat('hull');
-    pl.hitCooldown = 1.5;
+    gameOver(reason);
   }
 
   // Einzelspieler: Bankrott = Spielende
@@ -2460,10 +2448,9 @@
   }));
 
   function render() {
-    // Gemeinsame Kamera: Mitte zwischen beiden Pods, zoomt heraus, wenn sie sich entfernen
+    // Einzelspieler-Kamera: fokussiert den Pod mit engerem Zoom
     const sw = canvas.width, sh0 = canvas.height;
-    const focus = players.filter(pl => pl.dead <= 0);
-    const fp = focus.length ? focus : players;
+    const fp = players;
     let minX = Infinity, maxX2 = -Infinity, minY = Infinity, maxY = -Infinity;
     for (const pl of fp) {
       minX = Math.min(minX, pl.x); maxX2 = Math.max(maxX2, pl.x + pl.w);
@@ -2471,11 +2458,9 @@
     }
     const spanX = maxX2 - minX + 420, spanY = maxY - minY + 340;
     // Einzelspieler: näher dran – sichtbar ist nur ~50 % der Kartenbreite (alles doppelt so gross)
-    const targetZoom = multi()
-      ? Math.max(0.45, Math.min(1, sw / spanX, sh0 / spanY))
-      : Math.max(1.6, Math.min(3, sw / (W * T * D.camera.singleViewWidth)));
+    const targetZoom = Math.max(1.6, Math.min(3, sw / (W * T * D.camera.singleViewWidth)));
     // Salon des Barons: Kamera rastet ein – Decke, Kronleuchter und Boss immer gleichzeitig im Bild
-    const lairCam = BOSS && players.every(pl => pl.dead > 0 || inLair(pl));
+    const lairCam = BOSS && players.every(inLair);
     const tz = lairCam ? Math.min(targetZoom, sh0 / ((LAIR_ROWS - 1) * T)) : targetZoom;
     cam.zoom += (tz - cam.zoom) * 0.08;
     const z = cam.zoom;
@@ -2573,7 +2558,6 @@
 
     // Pods (blinken nach einem Treffer)
     for (const pl of players) {
-      if (pl.dead > 0) continue;
       pod = pl;
       if (pod.hitCooldown <= 0 || Math.floor(state.time * 14) % 2 === 0) drawPod(pod.x - ox, pod.y - oy);
       if (pod.shield > 0) drawShield(pod.x - ox, pod.y - oy);
@@ -2583,7 +2567,7 @@
 
     // Dunkelheit in der Tiefe – jeder Pod hat seinen eigenen Lichtkegel
     const depthTiles = (cam.y + vh / 2) / T - SURF;
-    const torchOn = players.some(pl => pl.torch > 0 && pl.dead <= 0);
+    const torchOn = players.some(pl => pl.torch > 0);
     const dark = Math.max(0, Math.min(0.88, depthTiles / 45)) * (torchOn ? 0.25 : 1);
     if (dark > 0) {
       if (!darkCanvas || darkCanvas.width !== sw || darkCanvas.height !== sh0) {
@@ -2598,7 +2582,6 @@
       dc.fillRect(0, 0, sw, sh0);
       dc.globalCompositeOperation = 'destination-out';
       for (const pl of players) {
-        if (pl.dead > 0) continue;
         const px = (pl.x + pl.w / 2 - ox) * z, py = (pl.y + pl.h / 2 - oy) * z;
         const r1 = 70 * z, r2 = 380 * z;
         const rg = dc.createRadialGradient(px, py, r1, px, py, r2);
@@ -2660,7 +2643,6 @@
   // Nummer über jedem Pod + Hinweis, wenn er vor einem Gebäude steht
   function drawPlayerTags(ox, oy) {
     for (const pl of players) {
-      if (pl.dead > 0) continue;
       pod = pl;
       const x = pl.x + pl.w / 2 - ox, y = pl.y - oy - 30;
       const s = currentStation();
@@ -2671,9 +2653,6 @@
         const sg = PIXEL.sign('BOMBE HIER = HAFTLADUNG AM KRONLEUCHTER', '#9a1a2a');
         blit(sg, x - sg.width / 2, y - 34);
       }
-      if (!multi()) continue;
-      blitC(PIXEL.disc(10, PIXEL.ramp(pl.color)), x, y);
-      ptext(pl.short, x, y - 8, '#ffffff', 'center', true);
     }
   }
 
@@ -2851,7 +2830,7 @@
     butler.x = tx; butler.dir = 1;
     if (pl) { butler.pose = 'pump'; return; }
     // Kundschaft erkannt: einmal verbeugen und grüssen
-    const guest = players.find(p => p.dead <= 0 && Math.abs(p.y + p.h - SURF * T) < 4 && p.x + p.w > FUEL_ST.x * T && p.x < (FUEL_ST.x + FUEL_ST.w) * T);
+    const guest = players.find(p => Math.abs(p.y + p.h - SURF * T) < 4 && p.x + p.w > FUEL_ST.x * T && p.x < (FUEL_ST.x + FUEL_ST.w) * T);
     if (guest && butler.greeted !== guest) {
       butler.greeted = guest; butler.bowT = 1.3;
       if (!introOpen) floatText(butler.x + 10, SURF * T - 44, pick(['Bonjour, Monsieur.', 'Volltanken, Monsieur?', 'Einmal Super Royale?', 'Sehr wohl, Monsieur.']), '#c9b9e6');
@@ -2989,14 +2968,87 @@
 
   // Gadget-Leiste unten (für Spieler 1 bzw. Einzelspieler)
   const gadgetBar = document.getElementById('gadgetbar');
+  const gadgetPicker = document.getElementById('gadget-picker');
+  let mobileGadgetSlots = [null, null], gadgetPress = null;
   let gadgetBarKey = '';
+  function openMobileGadgetPicker(slot) {
+    const pl = players[0];
+    if (!pl) return;
+    gadgetPicker.dataset.slot = slot;
+    gadgetPicker.innerHTML = `<div class="mobile-picker-head">Gadget für Knopf ${slot + 1}<button type="button" class="mobile-picker-close" aria-label="Schliessen">×</button></div>
+      <div class="mobile-picker-list">${D.gadgets.map(g => {
+        const n = pl.gadgets[g.id] || 0;
+        return `<button type="button" class="mobile-gadget-choice" data-gadget-id="${g.id}" ${n ? '' : 'disabled'}>
+          <img class="pxi" src="${PIXEL.iconURL(g.id)}" alt=""><span>${g.name.split(' «')[0]}</span><b>×${n}</b>
+        </button>`;
+      }).join('')}${capturedList(pl).map(m => `<button type="button" class="mobile-gadget-choice" data-gadget-id="captured:${m.id}">
+        <img class="pxi" src="${PIXEL.iconURL('mine_' + m.id)}" alt=""><span>${m.name}</span><b>×${pl.captured[m.id]}</b>
+      </button>`).join('')}</div>`;
+    gadgetPicker.classList.remove('hidden');
+  }
+  gadgetBar.addEventListener('pointerdown', e => {
+    const button = e.target.closest('.mobile-gslot');
+    if (e.pointerType !== 'touch' || !button) return;
+    e.preventDefault();
+    button.setPointerCapture(e.pointerId);
+    const press = { id: e.pointerId, slot: Number(button.dataset.mobileSlot), longPressed: false, timer: null };
+    gadgetPress = press;
+    press.timer = setTimeout(() => {
+      if (gadgetPress !== press) return;
+      press.longPressed = true;
+      openMobileGadgetPicker(press.slot);
+    }, 500);
+  });
+  gadgetBar.addEventListener('pointerup', e => {
+    if (!gadgetPress || e.pointerId !== gadgetPress.id) return;
+    const press = gadgetPress;
+    clearTimeout(press.timer);
+    gadgetPress = null;
+    if (press.longPressed) return;
+    const id = mobileGadgetSlots[press.slot];
+    const g = D.gadgets.find(item => item.id === id);
+    if (g) useGadget(players[0], D.gadgets.indexOf(g));
+    else if (id && id.startsWith('captured:')) {
+      const mineId = id.slice('captured:'.length);
+      if (players[0].captured[mineId] > 0) { players[0].capSel = mineId; placeCaptured(players[0]); }
+      else toast('Diese erbeutete Bombe ist nicht mehr vorhanden.');
+    } else toast('Gadget-Knopf lange halten, um ein Gadget zu laden.');
+  });
+  gadgetBar.addEventListener('pointercancel', e => {
+    if (!gadgetPress || e.pointerId !== gadgetPress.id) return;
+    clearTimeout(gadgetPress.timer);
+    gadgetPress = null;
+  });
+  gadgetPicker.addEventListener('click', e => {
+    if (e.target.closest('.mobile-picker-close')) { gadgetPicker.classList.add('hidden'); return; }
+    const choice = e.target.closest('[data-gadget-id]');
+    if (!choice || choice.disabled) return;
+    mobileGadgetSlots[Number(gadgetPicker.dataset.slot)] = choice.dataset.gadgetId;
+    gadgetPicker.classList.add('hidden');
+    gadgetBarKey = '';
+    updateGadgetBar();
+  });
   function updateGadgetBar() {
     if (!gadgetBar) return;
     const pl = players[0];
     if (!pl) return;
-    const key = D.gadgets.map(g => pl.gadgets[g.id] || 0).join(',') + `|${Math.ceil(pl.shield)}|${Math.ceil(pl.torch)}|${JSON.stringify(pl.captured)}|${pl.capSel}|${!!pl.defusing}`;
+    const key = D.gadgets.map(g => pl.gadgets[g.id] || 0).join(',') + `|${Math.ceil(pl.shield)}|${Math.ceil(pl.torch)}|${JSON.stringify(pl.captured)}|${pl.capSel}|${!!pl.defusing}|${mobileGadgetSlots.join(',')}|${touchUi}`;
     if (key === gadgetBarKey) return;
     gadgetBarKey = key;
+    if (touchUi) {
+      gadgetBar.innerHTML = mobileGadgetSlots.map((id, i) => {
+        const g = D.gadgets.find(item => item.id === id);
+        const mine = id && id.startsWith('captured:') ? D.mines.find(item => item.id === id.slice('captured:'.length)) : null;
+        const n = g ? pl.gadgets[g.id] || 0 : mine ? pl.captured[mine.id] || 0 : 0;
+        const name = g ? g.name.split(' «')[0] : mine ? mine.name : null;
+        const icon = g ? g.id : mine ? 'mine_' + mine.id : null;
+        const timer = g && g.type === 'shield' && pl.shield > 0 ? Math.ceil(pl.shield) : g && g.type === 'torch' && pl.torch > 0 ? Math.ceil(pl.torch) : 0;
+        return `<button type="button" class="gslot mobile-gslot ${!name || !n ? 'empty' : ''} ${timer ? 'active' : ''}" data-mobile-slot="${i}" aria-label="${name ? `${name}, ${n} vorhanden. Tippen zum Aktivieren, halten zum Wechseln.` : `Gadget-Knopf ${i + 1}, halten zum Laden.`}">
+          <span class="gk">${i + 1} · HALTEN</span>${icon ? `<span class="gi"><img class="pxi" src="${PIXEL.iconURL(icon)}" alt=""></span><span class="mobile-gname">${name}</span><span class="gn">${timer ? timer + 's' : '×' + n}</span>` : '<span class="mobile-gname">Laden</span>'}
+        </button>`;
+      }).join('');
+      return;
+    }
     gadgetBar.innerHTML = D.gadgets.map((g, i) => {
       const n = pl.gadgets[g.id] || 0;
       const timer = g.type === 'shield' && pl.shield > 0 ? Math.ceil(pl.shield) : g.type === 'torch' && pl.torch > 0 ? Math.ceil(pl.torch) : 0;
@@ -3016,7 +3068,7 @@
       const h = hud[pl.idx];
       h.money.textContent = fmt(pl.money);
       const depth = Math.max(0, Math.floor((pl.y + pl.h) / T) - SURF);
-      h.depth.textContent = pl.dead > 0 ? `Abschlepp… ${Math.ceil(pl.dead)}` : `${depth * D.world.metersPerTile} m · ${LAIR_ROWS && pl.y + pl.h > LAIR_TOP * T + T * 2 ? 'Salon' : 'A' + (areaIndexAt(depth) + 1)}`;
+      h.depth.textContent = `${depth * D.world.metersPerTile} m · ${LAIR_ROWS && pl.y + pl.h > LAIR_TOP * T + T * 2 ? 'Salon' : 'A' + (areaIndexAt(depth) + 1)}`;
       const fuelPct = Math.max(0, pl.fuel / stat('tank'));
       const hullPct = Math.max(0, pl.hull / stat('hull'));
       // nur bei echter Änderung schreiben (auf 0.2 % gerundet)
@@ -3052,7 +3104,7 @@
     requestAnimationFrame(loop);
   }
 
-  newGame('single'); // Hintergrund hinter dem Menü
+  newGame(); // Hintergrund hinter dem Menü
   requestAnimationFrame(loop);
 
   // Nur für Entwicklung: Zeichenfunktionen auf eine andere Leinwand umleiten (z. B. für einen Sprite-Katalog)
@@ -3070,5 +3122,5 @@
   };
 
   // Für Debugging in der Browser-Konsole
-  window.__game = { get state() { return state; }, get pod() { return players[0]; }, get players() { return players; }, get worms() { return worms; }, get pickups() { return pickups; }, setTile, tileAt, newGame, startMode, get mode() { return mode; }, get cam() { return cam; }, get relics() { return relics; }, get bombs() { return bombs; }, useGadget, get delivered() { return delivered; }, get discovered() { return discovered; }, get mines() { return mines; }, get boss() { return boss; }, hurtBoss, winGame, get chandeliers() { return chandeliers; }, LAIR_TOP, placeCaptured, cycleCaptured, get rocks() { return rocks; }, startQuake, ICE, MAGMA, SAND, WATER, FAULT, H, artifactAt: () => artifactAt };
+  window.__game = { get state() { return state; }, get pod() { return players[0]; }, get players() { return players; }, get worms() { return worms; }, get pickups() { return pickups; }, setTile, tileAt, newGame, startGame, get cam() { return cam; }, get relics() { return relics; }, get bombs() { return bombs; }, useGadget, get delivered() { return delivered; }, get discovered() { return discovered; }, get mines() { return mines; }, get boss() { return boss; }, hurtBoss, winGame, get chandeliers() { return chandeliers; }, LAIR_TOP, placeCaptured, cycleCaptured, get rocks() { return rocks; }, startQuake, ICE, MAGMA, SAND, WATER, FAULT, H, artifactAt: () => artifactAt };
 })();

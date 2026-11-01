@@ -304,7 +304,7 @@ const SFX = (() => {
   // =====================================================================
   const AMB_VOL = 0.32;
   const ZONES = {
-    surface: { notes: [33, 40], filt: 220, wind: 0.22, windF: 500, ev: ['gust', 'gust', 'chime'] },
+    surface: { notes: [33, 40], filt: 220, wind: 0.08, windF: 500, ev: ['gust', 'gust', 'chime'] },
     a1:      { notes: [26, 33], filt: 180, wind: 0.10, windF: 300, ev: ['drip', 'drip', 'clank', 'creak'] },
     a2:      { notes: [25, 31], filt: 170, wind: 0.08, windF: 260, ev: ['drip', 'bubbles', 'drip', 'groan'] },   // Tritonus
     a3:      { notes: [29, 36, 48], filt: 260, wind: 0.07, windF: 900, ev: ['shimmer', 'drip', 'shimmer', 'creak'] },
