@@ -337,7 +337,7 @@
 
   function applyHelpUi() {
     $('help').innerHTML = touchUi
-      ? 'ZIEHEN: STEUERN · TIPPEN: AKTION · GADGET TIPPEN: NUTZEN / HALTEN: LADEN'
+      ? 'ZIEHEN: WEITER = MEHR SCHUB / FAHRT · TIPPEN: AKTION · GADGET TIPPEN: NUTZEN / HALTEN: LADEN'
       : `<b>WASD / Pfeile</b> fliegen &amp; bohren &nbsp;·&nbsp; <b>E</b> eintreten / bestätigen &nbsp;·&nbsp; <b>T</b> Ton ${SFX.muted ? 'aus' : 'an'} &nbsp;·&nbsp; <b>Esc</b> zurück`;
   }
   function releaseAllKeys() {
@@ -347,19 +347,26 @@
   const touchUi = window.matchMedia('(pointer: coarse)').matches;
   if (touchUi) {
     const startDesc = introEl.querySelector('[data-start] .start-desc');
-    if (startDesc) startDesc.textContent = 'Ziehen zum Steuern · Tippen für Aktion';
+    if (startDesc) startDesc.textContent = 'Weiter ziehen = mehr Schub · Tippen für Aktion';
     const press = introEl.querySelector('.press');
     if (press) press.textContent = 'Zum Starten tippen';
   }
   let touchGesture = null;
+  const touchInput = { x: 0, y: 0 };
   function setTouchDirection(dx, dy) {
     const pl = players[0];
     if (!pl) return;
-    const deadzone = 18;
-    pl.keys.left = dx < -deadzone && Math.abs(dx) > Math.abs(dy) * 0.55;
-    pl.keys.right = dx > deadzone && Math.abs(dx) > Math.abs(dy) * 0.55;
-    pl.keys.up = dy < -deadzone && Math.abs(dy) > Math.abs(dx) * 0.55;
-    pl.keys.down = dy > deadzone && Math.abs(dy) > Math.abs(dx) * 0.55;
+    const axisInput = value => {
+      const magnitude = Math.abs(value);
+      if (magnitude <= 10) return 0;
+      return Math.sign(value) * Math.min(1, (magnitude - 10) / 100);
+    };
+    touchInput.x = axisInput(dx);
+    touchInput.y = axisInput(dy);
+    pl.keys.left = touchInput.x < -0.12;
+    pl.keys.right = touchInput.x > 0.12;
+    pl.keys.up = touchInput.y < -0.12;
+    pl.keys.down = touchInput.y > 0.12;
   }
   function clearTouchGesture() {
     touchGesture = null;
@@ -2311,17 +2318,21 @@
     } else {
       const eng = tier('engine');
       const keys = pod.frozen > 0 || pod.defusing ? {} : pod.keys;
+      const hasControl = pod.frozen <= 0 && !pod.defusing;
+      const touchControls = touchUi && pod === players[0] && touchGesture !== null;
+      const moveInput = !hasControl ? 0 : touchControls ? touchInput.x : keys.left ? -1 : keys.right ? 1 : 0;
+      const thrustInput = !hasControl ? 0 : touchControls ? Math.max(0, -touchInput.y) : Number(keys.up);
       if (pod.frozen > 0) { pod.frozen -= dt; pod.vx *= Math.exp(-10 * dt); }
-      if (keys.left) { pod.vx -= P.moveAccel * eng.speed * env.accel * dt; pod.facing = -1; }
-      else if (keys.right) { pod.vx += P.moveAccel * eng.speed * env.accel * dt; pod.facing = 1; }
+      if (moveInput < 0) { pod.vx += P.moveAccel * eng.speed * env.accel * dt * moveInput; pod.facing = -1; }
+      else if (moveInput > 0) { pod.vx += P.moveAccel * eng.speed * env.accel * dt * moveInput; pod.facing = 1; }
       else pod.vx *= Math.exp((pod.onGround ? (env.ice ? -0.6 : -12) : -2.5) * dt);
       const maxX = P.maxSpeedX * eng.speed * env.speed;
       pod.vx = Math.max(-maxX, Math.min(maxX, pod.vx));
 
       pod.vy += P.gravity * env.gravity * dt - env.lift * dt;
-      if (keys.up && pod.fuel > 0) {
+      if (thrustInput > 0 && pod.fuel > 0) {
         if (!pod.wasThrusting && pod.levels.engine === 2) backfire(); // V12 knallt beim Abheben
-        pod.vy -= P.thrust * eng.value * env.thrust * dt; pod.thrusting = true;
+        pod.vy -= P.thrust * eng.value * env.thrust * dt * thrustInput; pod.thrusting = true;
         if (env.sand) {   // Treibsand: Schub wirkungslos, der Pod sinkt weiter
           pod.vy = Math.max(pod.vy, (PH.quicksand.sink || 26) * 0.6);
           say('sandthrust', PH.quicksand.thrustMsg, false, 8);
@@ -2332,7 +2343,7 @@
       pod.wasThrusting = pod.thrusting;
       pod.vy = Math.max(-P.maxSpeedUp * eng.speed, Math.min(env.maxFall, pod.vy));
 
-      if (pod.onGround && !keys.up && !(pod.frozen > 0) && !pod.defusing) {
+      if (pod.onGround && thrustInput === 0 && !(pod.frozen > 0) && !pod.defusing) {
         if (pod.keys.down) tryDrill(0, 1);
         else if (pod.keys.left && pod.blockedL) tryDrill(-1, 0);
         else if (pod.keys.right && pod.blockedR) tryDrill(1, 0);
@@ -2349,7 +2360,7 @@
         burnFuel('thrust', dt, PH.ice.thawFuel || 2.5);
         say('thaw', PH.ice.thawMsg, false, 10);
         if (Math.random() < 0.5) spawnParticle(pod.x + pod.w / 2 + (Math.random() - 0.5) * 22, pod.y + 2, Math.random() < 0.5 ? '#e8f8ff' : '#bfe8ff', { size: 2, vy: -50, g: -30, life: 0.7 });
-      } else burnFuel(pod.thrusting ? 'thrust' : (pod.keys.left || pod.keys.right) ? 'move' : 'idle', dt, env.fuel);
+      } else burnFuel(pod.thrusting ? 'thrust' : moveInput !== 0 ? 'move' : 'idle', dt, env.fuel * (pod.thrusting ? thrustInput : 1));
     }
     engineEffects(dt);
     pod.shield = Math.max(0, pod.shield - dt);
@@ -2458,7 +2469,9 @@
     }
     const spanX = maxX2 - minX + 420, spanY = maxY - minY + 340;
     // Einzelspieler: näher dran – sichtbar ist nur ~50 % der Kartenbreite (alles doppelt so gross)
-    const targetZoom = Math.max(1.6, Math.min(3, sw / (W * T * D.camera.singleViewWidth)));
+    const targetZoom = touchUi
+      ? Math.max(0.9, Math.min(1.5, sw / (W * T * 0.8)))
+      : Math.max(1.6, Math.min(3, sw / (W * T * D.camera.singleViewWidth)));
     // Salon des Barons: Kamera rastet ein – Decke, Kronleuchter und Boss immer gleichzeitig im Bild
     const lairCam = BOSS && players.every(inLair);
     const tz = lairCam ? Math.min(targetZoom, sh0 / ((LAIR_ROWS - 1) * T)) : targetZoom;
