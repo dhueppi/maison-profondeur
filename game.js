@@ -267,7 +267,7 @@
       money: D.start.money, levels: { drill: 0, engine: 0, tank: 0, hull: 0, cargo: 0 },
       maxDepth: 0, loveStep: 0, hitCooldown: 0, lastHitBy: null,
       towing: null, trail: [], artifacts: [],
-      gadgets: {}, captured: {}, capSel: null, defusing: null, shield: 0, torch: 0,
+      gadgets: {}, captured: {}, capSel: null, defusing: null, frozen: 0, shield: 0, torch: 0,
       x: def.spawn * T + (T - pw) / 2, y: SURF * T - ph, w: pw, h: ph, vx: 0, vy: 0,
       onGround: true, blockedL: false, blockedR: false,
       fuel: D.upgrades.tank[0].value, hull: D.upgrades.hull[0].value,

@@ -261,6 +261,11 @@ button.start-game .start-desc { font-size: 13px; font-weight: 600; line-height: 
 
 @media (pointer: coarse) {
   canvas { touch-action: none; }
+  #gadgetbar, #gadgetbar *, #gadget-picker, #gadget-picker * {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
   #help {
     bottom: calc(102px + env(safe-area-inset-bottom));
     max-width: 92vw;
